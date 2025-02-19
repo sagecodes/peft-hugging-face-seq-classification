@@ -5,6 +5,7 @@ Download the dataset from hugging face for sequence classification
 import pandas as pd
 from datasets import load_dataset
 from sklearn.model_selection import train_test_split
+from pathlib import Path
 
 def download_dataset() ->  tuple[str, str, str]:
 
@@ -18,13 +19,13 @@ def download_dataset() ->  tuple[str, str, str]:
         train_df, test_size=0.2, stratify=train_df["label"], random_state=42
     )
 
-    data_dir = "data"
+    data_dir = Path("datasets")
     data_dir.mkdir(parents=True, exist_ok=True)
 
      # Save datasets as CSV files
-    train_path = data_dir / "train.csv"
-    val_path = data_dir / "val.csv"
-    test_path = data_dir / "test.csv"
+    train_path = data_dir / "imdb_train.csv"
+    val_path = data_dir / "imdb_val.csv"
+    test_path = data_dir / "imdb_test.csv"
 
     train_df.to_csv(train_path, index=False)
     val_df.to_csv(val_path, index=False)
@@ -35,3 +36,6 @@ def download_dataset() ->  tuple[str, str, str]:
         val_path,
         test_path,
     )
+
+if __name__ == "__main__":
+    download_dataset()
