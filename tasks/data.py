@@ -7,14 +7,16 @@ from datasets import load_dataset
 from sklearn.model_selection import train_test_split
 from pathlib import Path
 import base64
+from tasks.utils import image_to_base64
+
 
 # --------------------------------
 # Download the dataset
 # --------------------------------
-def download_dataset(dataset_name: str = "imdb") ->  tuple[str, str, str]:
+def download_dataset(dataset_name: str = "imdb") -> dict:
 
-    # Load IMDB dataset
-    dataset = load_dataset(dataset_name) # Load the IMDB dataset from Hugging Face
+    # Load Hugging Face Dataset
+    dataset = load_dataset(dataset_name)
     train_df = dataset["train"].to_pandas()
     test_df = dataset["test"].to_pandas()
 
@@ -26,7 +28,7 @@ def download_dataset(dataset_name: str = "imdb") ->  tuple[str, str, str]:
     data_dir = Path(f"datasets/{dataset_name}")
     data_dir.mkdir(parents=True, exist_ok=True)
 
-     # Save datasets as CSV files
+    # Save datasets as CSV files
     train_path = data_dir / "train_data.csv"
     val_path = data_dir / "val_data.csv"
     test_path = data_dir / "test_data.csv"
@@ -35,39 +37,45 @@ def download_dataset(dataset_name: str = "imdb") ->  tuple[str, str, str]:
     val_df.to_csv(val_path, index=False)
     test_df.to_csv(test_path, index=False)
 
-    return (
-        train_path,
-        val_path,
-        test_path,
-    )
+    data_paths = {"train": train_path, "val": val_path, "test": test_path}
+
+    return data_paths
+
 
 # --------------------------------
 # Visualize the data
 # --------------------------------
+def visualize_data(data_paths: dict, 
+                    label_column: str = "label",
+                     text_column: str = "text") -> str:
 
-def visualize_data():
-    train_df = pd.read_csv("datasets/imdb_train.csv")
-    print(train_df.head())
+    sample_reviews = {}
 
-    val_df = pd.read_csv("datasets/imdb_val.csv")
-    print(val_df.head())
+    for dataset_name, file_path in data_paths.items():
+        df = pd.read_csv(file_path)
+        print(f"Dataset: {dataset_name}")
+        print(df.head())
 
-    test_df = pd.read_csv("datasets/imdb_test.csv")
-    print(test_df.head())
+        # Extract a positive and negative review if they exist
+        positive_review = (
+            df[df[label_column] == 1].iloc[0][text_column]
+            if not df[df[label_column] == 1].empty
+            else "No positive review found"
+        )
+        negative_review = (
+            df[df[label_column] == 0].iloc[0][text_column]
+            if not df[df[label_column] == 0].empty
+            else "No negative review found"
+        )
 
-    # Sample reviews from the datasets
-    train_positive_review = train_df[train_df["label"] == 1].iloc[0]["text"]
-    train_negative_review = train_df[train_df["label"] == 0].iloc[0]["text"]
-    val_positive_review = val_df[val_df["label"] == 1].iloc[0]["text"]
-    val_negative_review = val_df[val_df["label"] == 0].iloc[0]["text"]
-    test_positive_review = test_df[test_df["label"] == 1].iloc[0]["text"]
-    test_negative_review = test_df[test_df["label"] == 0].iloc[0]["text"]
+        sample_reviews[dataset_name] = {
+            "positive": positive_review,
+            "negative": negative_review,
+        }
 
-     # Convert images to base64 for embedding
-    def image_to_base64(image_path):
-        with open(image_path, "rb") as img_file:
-            return base64.b64encode(img_file.read()).decode("utf-8")
+    return sample_reviews
 
     
+
 if __name__ == "__main__":
     download_dataset()
