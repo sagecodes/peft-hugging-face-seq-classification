@@ -10,6 +10,10 @@ Dependencies:
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from pathlib import Path
+from datasets import Dataset
+from transformers import TrainingArguments, Trainer
+import pandas as pd
+
 
 
 # --------------------------------
@@ -39,7 +43,48 @@ def download_sequence_class_model(model_name: str = "distilbert-base-uncased") -
 
 
 # --------------------------------
-# Fine-tune the model LoRA
+# Fine-tune the full model
 # --------------------------------
-def fine_tune_model():
-    pass
+def fine_tune_model(model_dir: str, data_paths: dict, epochs: int = 2) -> str:
+
+    # Load the model and tokenizer
+    model = AutoModelForSequenceClassification.from_pretrained(model_dir)
+    tokenizer = AutoTokenizer.from_pretrained(model_dir)
+
+    # Load a sample of the data
+    train_data = pd.read_csv(data_paths["train"]).sample(n=500, random_state=42)
+    val_data = pd.read_csv(data_paths["val"]).sample(n=100, random_state=42)
+
+    # Convert DataFrames to Hugging Face datasets
+    train_dataset = Dataset.from_pandas(train_data)
+    val_dataset = Dataset.from_pandas(val_data)
+
+    # Tokenize the data
+    def tokenizer_function(examples):
+        return tokenizer(examples["text"], padding="max_length", truncation=True)
+
+    tokenized_train_dataset = train_dataset.map(tokenizer_function)
+    tokenized_val_dataset = val_dataset.map(tokenizer_function)
+
+    # Define the training arguments
+    training_args = TrainingArguments(
+        output_dir="./results", num_train_epochs=epochs, evaluation_strategy="epoch"
+    )
+
+    # Initialize the Trainer
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=tokenized_train_dataset,
+        eval_dataset=tokenized_val_dataset,
+    )
+
+    trainer.train()
+
+    # Save the trained model
+    output_dir = Path("trained_model")
+    model.save_pretrained(output_dir)
+    tokenizer.save_pretrained(output_dir)
+
+    # return the output directory
+    return output_dir
