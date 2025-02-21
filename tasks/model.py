@@ -11,6 +11,7 @@ import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from pathlib import Path
 
+
 # --------------------------------
 # Download the model from hugging face for sequence classification
 # --------------------------------
@@ -38,5 +39,7 @@ def download_sequence_class_model(model_name: str = "distilbert-base-uncased") -
 
 
 # --------------------------------
-# Fine-tune the model
+# Fine-tune the model LoRA
 # --------------------------------
+def fine_tune_model():
+    pass

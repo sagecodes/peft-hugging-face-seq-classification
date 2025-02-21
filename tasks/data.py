@@ -75,7 +75,3 @@ def visualize_data(data_paths: dict,
 
     return sample_reviews
 
-    
-
-if __name__ == "__main__":
-    download_dataset()
