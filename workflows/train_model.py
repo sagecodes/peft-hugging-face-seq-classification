@@ -1,4 +1,4 @@
-from tasks.model import download_sequence_class_model, fine_tune_model
+from tasks.model import download_sequence_class_model, fine_tune_model, fine_tune_model_lora
 import pandas as pd
 
 MODEL_NAME = "distilbert-base-uncased"
@@ -12,8 +12,17 @@ data_paths = {
 
 
 # download_sequence_class_model(MODEL_NAME)
-fine_tune_model(MODEL_DIR, data_paths)
+# fine_tune_model(MODEL_DIR, data_paths)
 
+# Fine-tune the model with LoR
+fine_tune_model_lora(
+    MODEL_DIR,
+    data_paths,
+    epochs=2,
+    lora_r=8,
+    lora_alpha=16,
+    lora_dropout=0.1,
+)
 
 
 # Run the script from the command line:
