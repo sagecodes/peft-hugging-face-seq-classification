@@ -7,22 +7,38 @@ Dependencies:
         pip install -r requirements.txt
 """
 
-import torch
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from pathlib import Path
-from datasets import Dataset
-from transformers import TrainingArguments, Trainer, BitsAndBytesConfig
-import pandas as pd
-from peft import get_peft_model, LoraConfig, TaskType, prepare_model_for_kbit_training
-import bitsandbytes as bnb
 
+import bitsandbytes as bnb
+import pandas as pd
+import torch
+from peft import LoraConfig, TaskType, get_peft_model
+from transformers import (AutoModelForSequenceClassification, AutoTokenizer,
+                          BitsAndBytesConfig, Trainer, TrainingArguments)
+
+from datasets import Dataset
+from sklearn.metrics import classification_report, confusion_matrix
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+import json
 
 
 # --------------------------------
 # Download the model from hugging face for sequence classification
 # --------------------------------
 def download_sequence_class_model(model_name: str = "distilbert-base-uncased") -> str:
+    """
+    Download a pre-trained sequence classification model from Hugging Face.
 
+    Args:
+        model_name (str): The name of the pre-trained model to download from HF.
+
+    Returns:
+        str: The path to the downloaded model.
+    """
+
+    # Create a directory to save the model
     model_dir = Path(f"pre_trained_models/{model_name}")
     model_dir.mkdir(parents=True, exist_ok=True)
 
@@ -48,7 +64,18 @@ def download_sequence_class_model(model_name: str = "distilbert-base-uncased") -
 # Fine-tune the full model
 # --------------------------------
 def fine_tune_model(model_dir: str, data_paths: dict, epochs: int = 2) -> str:
+    """
+    Fine-tune a pre-trained sequence classification model on a dataset.
 
+    Args:
+        model_dir (str): The path to the pre-trained model.
+        data_paths (dict): A dictionary containing the paths to the train, validation, and test datasets.
+        epochs (int): The number of epochs for training.
+
+    Returns:
+        str: The path to the trained model.
+    """
+    
     # Load the model and tokenizer
     model = AutoModelForSequenceClassification.from_pretrained(model_dir)
     tokenizer = AutoTokenizer.from_pretrained(model_dir)
@@ -173,20 +200,22 @@ def fine_tune_model_qlora(
     lora_alpha: int = 16,
     lora_dropout: float = 0.1,
 ) -> str:
-    
+
     # configure the Quantization
-    bnb_config = BitsAndBytesConfig(  
-            load_in_4bit= True,
-            bnb_4bit_quant_type= "nf4",
-            bnb_4bit_compute_dtype= torch.bfloat16,
-            bnb_4bit_use_double_quant= True,
-            llm_int8_skip_modules=["classifier", "pre_classifier"]
-        )
+    bnb_config = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_compute_dtype=torch.bfloat16,
+        bnb_4bit_use_double_quant=True,
+        llm_int8_skip_modules=["classifier", "pre_classifier"],
+    )
 
     # Load the model and tokenizer
-    model = AutoModelForSequenceClassification.from_pretrained(model_dir, 
-                                                               quantization_config=bnb_config,
-                                                                torch_dtype=torch.bfloat16,)
+    model = AutoModelForSequenceClassification.from_pretrained(
+        model_dir,
+        quantization_config=bnb_config,
+        torch_dtype=torch.bfloat16,
+    )
     tokenizer = AutoTokenizer.from_pretrained(model_dir)
 
     # Apply LoRA adaptation
@@ -242,3 +271,69 @@ def fine_tune_model_qlora(
     tokenizer.save_pretrained(output_dir)
 
     return str(output_dir)
+
+# --------------------------------
+# Evaluate the model
+# --------------------------------
+
+def evaluate_model(model_dir: str, data_paths: dict) -> dict:
+    # Load the model and tokenizer
+    model = AutoModelForSequenceClassification.from_pretrained(model_dir)
+    tokenizer = AutoTokenizer.from_pretrained(model_dir)
+
+    # Load the test data
+    # test_data = pd.read_csv(data_path)
+    test_data = pd.read_csv(data_paths["test"]).sample(n=100, random_state=42)
+
+
+    # Convert DataFrame to Hugging Face dataset
+    test_dataset = Dataset.from_pandas(test_data)
+
+    # Tokenize the data
+    def tokenizer_function(examples):
+        return tokenizer(examples["text"], padding="max_length", truncation=True)
+
+    tokenized_test_dataset = test_dataset.map(tokenizer_function)
+
+    # Define the training arguments
+    training_args = TrainingArguments(
+        output_dir="./results", evaluation_strategy="epoch"
+    )
+
+    # Initialize the Trainer
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        eval_dataset=tokenized_test_dataset,
+    )
+
+    # Evaluate the model
+    eval_results = trainer.evaluate()
+    predictions = trainer.predict(tokenized_test_dataset)
+    preds = np.argmax(predictions.predictions, axis=1)
+    labels = test_data["label"].values
+
+    # Generate Classification Report
+    report = classification_report(labels, preds, output_dict=True)
+    report_path = f"{model_dir}/classification_report.json"
+    # pd.DataFrame(report).transpose().to_json(report_path, indent=4)
+    with open(report_path, 'w') as f:
+        json.dump(report, f, indent=4)
+    
+    
+    # Generate Confusion Matrix
+    cm = confusion_matrix(labels, preds)
+    cm_path = f"{model_dir}/confusion_matrix.png"
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=set(labels), yticklabels=set(labels))
+    plt.xlabel("Predicted")
+    plt.ylabel("Actual")
+    plt.title("Confusion Matrix")
+    plt.savefig(cm_path)
+    plt.close()
+    
+    return {
+        "eval_results": eval_results,
+        "classification_report": report_path,
+        "confusion_matrix": cm_path
+    }
