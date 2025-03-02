@@ -14,10 +14,10 @@ import pandas as pd
 import torch
 from peft import LoraConfig, TaskType, get_peft_model
 from transformers import (AutoModelForSequenceClassification, AutoTokenizer,
-                          BitsAndBytesConfig, Trainer, TrainingArguments)
+                          BitsAndBytesConfig, Trainer, TrainingArguments, EarlyStoppingCallback)
 
 from datasets import Dataset
-from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.metrics import classification_report, confusion_matrix, roc_curve, auc
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -81,8 +81,8 @@ def fine_tune_model(model_dir: str, data_paths: dict, epochs: int = 2) -> str:
     tokenizer = AutoTokenizer.from_pretrained(model_dir)
 
     # Load a sample of the data
-    train_data = pd.read_csv(data_paths["train"]).sample(n=500, random_state=42)
-    val_data = pd.read_csv(data_paths["val"]).sample(n=100, random_state=42)
+    train_data = pd.read_csv(data_paths["train"]).sample(n=5000, random_state=42)
+    val_data = pd.read_csv(data_paths["val"]).sample(n=1000, random_state=42)
 
     # Convert DataFrames to Hugging Face datasets
     train_dataset = Dataset.from_pandas(train_data)
@@ -146,8 +146,8 @@ def fine_tune_model_lora(
     model = get_peft_model(model, lora_config)
 
     # Load a sample of the data
-    train_data = pd.read_csv(data_paths["train"]).sample(n=500, random_state=42)
-    val_data = pd.read_csv(data_paths["val"]).sample(n=100, random_state=42)
+    train_data = pd.read_csv(data_paths["train"]).sample(n=5000, random_state=42)
+    val_data = pd.read_csv(data_paths["val"]).sample(n=1000, random_state=42)
 
     # Convert DataFrames to Hugging Face datasets
     train_dataset = Dataset.from_pandas(train_data)
@@ -165,10 +165,15 @@ def fine_tune_model_lora(
         output_dir="./results",
         num_train_epochs=epochs,
         evaluation_strategy="epoch",
+        save_strategy="epoch",
         per_device_train_batch_size=8,
         per_device_eval_batch_size=8,
         logging_dir="./logs",
         save_total_limit=1,
+        load_best_model_at_end=True,
+        metric_for_best_model="eval_loss",
+        greater_is_better=False,
+
     )
 
     # Initialize the Trainer
@@ -177,6 +182,7 @@ def fine_tune_model_lora(
         args=training_args,
         train_dataset=tokenized_train_dataset,
         eval_dataset=tokenized_val_dataset,
+        callbacks=[EarlyStoppingCallback(early_stopping_patience=2)]
     )
 
     trainer.train()
@@ -230,8 +236,8 @@ def fine_tune_model_qlora(
     model = get_peft_model(model, lora_config)
 
     # Load a sample of the data
-    train_data = pd.read_csv(data_paths["train"]).sample(n=500, random_state=42)
-    val_data = pd.read_csv(data_paths["val"]).sample(n=100, random_state=42)
+    train_data = pd.read_csv(data_paths["train"]).sample(n=5000, random_state=42)
+    val_data = pd.read_csv(data_paths["val"]).sample(n=1000, random_state=42)
 
     # Convert DataFrames to Hugging Face datasets
     train_dataset = Dataset.from_pandas(train_data)
@@ -283,7 +289,7 @@ def evaluate_model(model_dir: str, data_paths: dict) -> dict:
 
     # Load the test data
     # test_data = pd.read_csv(data_path)
-    test_data = pd.read_csv(data_paths["test"]).sample(n=100, random_state=42)
+    test_data = pd.read_csv(data_paths["test"]).sample(n=1000, random_state=42)
 
 
     # Convert DataFrame to Hugging Face dataset
@@ -311,29 +317,48 @@ def evaluate_model(model_dir: str, data_paths: dict) -> dict:
     eval_results = trainer.evaluate()
     predictions = trainer.predict(tokenized_test_dataset)
     preds = np.argmax(predictions.predictions, axis=1)
+    probs = torch.nn.functional.softmax(torch.tensor(predictions.predictions), dim=1).numpy()
     labels = test_data["label"].values
 
     # Generate Classification Report
     report = classification_report(labels, preds, output_dict=True)
     report_path = f"{model_dir}/classification_report.json"
-    # pd.DataFrame(report).transpose().to_json(report_path, indent=4)
     with open(report_path, 'w') as f:
         json.dump(report, f, indent=4)
-    
     
     # Generate Confusion Matrix
     cm = confusion_matrix(labels, preds)
     cm_path = f"{model_dir}/confusion_matrix.png"
     plt.figure(figsize=(8, 6))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=set(labels), yticklabels=set(labels))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=sorted(set(labels)), yticklabels=sorted(set(labels)))
     plt.xlabel("Predicted")
     plt.ylabel("Actual")
     plt.title("Confusion Matrix")
     plt.savefig(cm_path)
     plt.close()
     
+    # Generate ROC Curve
+    if len(set(labels)) == 2:  # Only for binary classification
+        fpr, tpr, _ = roc_curve(labels, probs[:, 1])
+        roc_auc = auc(fpr, tpr)
+        roc_path = f"{model_dir}/roc_curve.png"
+        plt.figure(figsize=(8, 6))
+        plt.plot(fpr, tpr, color='blue', lw=2, label=f'ROC curve (area = {roc_auc:.2f}')
+        plt.plot([0, 1], [0, 1], color='grey', linestyle='--')
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.05])
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('Receiver Operating Characteristic')
+        plt.legend(loc="lower right")
+        plt.savefig(roc_path)
+        plt.close()
+    else:
+        roc_path = None
+    
     return {
         "eval_results": eval_results,
         "classification_report": report_path,
-        "confusion_matrix": cm_path
+        "confusion_matrix": cm_path,
+        "roc_curve": roc_path
     }
