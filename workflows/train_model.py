@@ -1,5 +1,5 @@
-from tasks.data import download_data
-from tasks.model import download_sequence_class_model, fine_tune_model, fine_tune_model_lora
+# from tasks.data import download_data
+from tasks.model import download_sequence_class_model, fine_tune_model, fine_tune_model_lora, fine_tune_model_qlora
 import pandas as pd
 import os
 
@@ -51,8 +51,18 @@ fine_tune_model_lora(
     lora_alpha=16,
     lora_dropout=0.1,
 )
-
 # python -m workflows.train_model fine_tune_model_lora
+
+fine_tune_model_qlora(
+    MODEL_DIR,
+    data_paths,
+    epochs=2,
+    lora_r= 8,
+    lora_alpha = 16,
+    lora_dropout= 0.1,
+)
+
+# python -m workflows.train_model fine_tune_model_qlora
 
 # Run the script from the command line:
 

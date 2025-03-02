@@ -1,7 +1,7 @@
 
 from tasks.inference import model_predict
 
-model_dir = "model_lora" 
+model_dir = "model_qlora" 
 
 preds = model_predict(model_dir, ["I love this movie!",
                                      "I hate this movie!"])
