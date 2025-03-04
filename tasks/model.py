@@ -97,7 +97,7 @@ def fine_tune_model(model_dir: str, data_paths: dict, epochs: int = 2) -> str:
 
     # Define the training arguments
     training_args = TrainingArguments(
-        output_dir="./results", num_train_epochs=epochs, evaluation_strategy="epoch"
+        output_dir="./results", num_train_epochs=epochs, eval_strategy="epoch"
     )
 
     # Initialize the Trainer
@@ -164,7 +164,7 @@ def fine_tune_model_lora(
     training_args = TrainingArguments(
         output_dir="./results",
         num_train_epochs=epochs,
-        evaluation_strategy="epoch",
+        eval_strategy="epoch",
         save_strategy="epoch",
         per_device_train_batch_size=8,
         per_device_eval_batch_size=8,
@@ -254,7 +254,7 @@ def fine_tune_model_qlora(
     training_args = TrainingArguments(
         output_dir="./results",
         num_train_epochs=epochs,
-        evaluation_strategy="epoch",
+        eval_strategy="epoch",
         per_device_train_batch_size=8,
         per_device_eval_batch_size=8,
         logging_dir="./logs",
@@ -277,6 +277,8 @@ def fine_tune_model_qlora(
     tokenizer.save_pretrained(output_dir)
 
     return str(output_dir)
+
+
 
 # --------------------------------
 # Evaluate the model
@@ -303,7 +305,7 @@ def evaluate_model(model_dir: str, data_paths: dict) -> dict:
 
     # Define the training arguments
     training_args = TrainingArguments(
-        output_dir="./results", evaluation_strategy="epoch"
+        output_dir="./results", eval_strategy="epoch"
     )
 
     # Initialize the Trainer
