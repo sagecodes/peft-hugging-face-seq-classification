@@ -1,5 +1,5 @@
 """Utility functions for tasks."""
-
+import base64
 
 # Convert images to base64 for embedding
 def image_to_base64(image_path):
