@@ -1,6 +1,7 @@
 
 from transformers import (AutoModelForSequenceClassification,
                               AutoTokenizer, pipeline)
+import pandas as pd
 
 
 def model_predict(
@@ -18,3 +19,11 @@ def model_predict(
     predictions = nlp_pipeline(texts, batch_size=8)
 
     return predictions
+
+# -----------------------
+# Text from CSV file
+# -----------------------
+def text_from_csv(file_path: str, text_column: str) -> list[str]:
+    df = pd.read_csv(file_path)
+    return df[text_column].tolist()
+
