@@ -8,3 +8,5 @@ preds = model_predict(model_dir, ["I love this movie!",
 print(preds)
 
 # python -m workflows.inference model_predict
+
+# Batch prediction from csv file (save csv file with predictions)
